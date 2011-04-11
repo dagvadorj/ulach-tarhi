@@ -2,8 +2,9 @@
 //////////////////////////////////////////////////////////////////////////////////
 //
 //////////////////////////////////////////////////////////////////////////////////
-module mem(clk, mem_write, mem_addr, mem_din, mem_dout);
+module mem(clk, mem_enable, mem_write, mem_addr, mem_din, mem_dout);
    input clk;
+   input mem_enable;
    input mem_write;
    input [23:0] mem_addr;
    input [31:0] mem_din;
@@ -16,9 +17,10 @@ module mem(clk, mem_write, mem_addr, mem_din, mem_dout);
       $readmemb("ram.dat", content, 0, 2**5-1);
    
    always @(negedge clk) begin
-      if (mem_write)
-         content[mem_addr] = mem_din;
-      mem_dout = content[mem_addr];
+      if (mem_enable)
+         if (mem_write)
+            content[mem_addr] <= mem_din;
+         mem_dout <= content[mem_addr];
    end
    
 endmodule

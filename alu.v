@@ -12,14 +12,14 @@ module alu(op,inp1,inp2,outp);
    
    always @(op or inp1 or inp2) begin
       case (op)
-         3'b000: outp = inp1 + inp2;
-         3'b001: outp = inp1 << inp2;
-         3'b010: outp = inp1 >> inp2;
-         3'b011: outp = inp1 & inp2;
-         3'b100: outp = inp1 | inp2;
-         3'b101: outp = inp1 ^ inp2;
-         3'b110: outp = ~inp1;
-         3'b111: outp = 1;
+         3'b000: outp <= inp1 + inp2;
+         3'b001: outp <= inp1 - inp2;
+         3'b010: outp <= inp1 << inp2;
+         3'b011: outp <= inp1 >> inp2;
+         3'b100: outp <= inp1 & inp2;
+         3'b101: outp <= inp1 | inp2;
+         3'b110: outp <= inp1 ^ inp2;
+         3'b111: outp <= ~inp1;
       endcase
    end
 

@@ -1,23 +1,28 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
-// Company: 
 //
 //////////////////////////////////////////////////////////////////////////////////
-module tarhi(clk, reset, mem_addr, mem_write, mem_din, mem_dout);
+module tarhi(clk, reset, mem_enable, mem_write, mem_addr, mem_din, mem_dout, r0);
    input clk;
    input reset;
-   output [23:0] mem_addr;
    input [31:0] mem_din;
-   output [31:0] mem_dout;
-   output mem_write;   
    
+   output mem_enable;
+   output mem_write;
+   output [23:0] mem_addr;
+   output [31:0] mem_dout;
+   output [31:0] r0;
+   
+   reg mem_enable;
+   reg mem_write;
    reg [23:0] mem_addr;
    reg [31:0] mem_dout;
-   reg mem_write;
    
    reg [23:0] pc;
-   reg [31:0] r0,r1,r2,r3;
+   reg [31:0] r0;
+   reg [31:0] r1,r2,r3;
    reg [2:0] state;
+   reg [1:0] exec_state;
    reg [31:0] instruct;
    
    reg [2:0] alu_op;
@@ -32,97 +37,104 @@ module tarhi(clk, reset, mem_addr, mem_write, mem_din, mem_dout);
       .outp(alu_outp)
    );
    
-   parameter _reset        = 3'b000,
-             _fetch        = 3'b001,
-             _decode       = 3'b010,
-             _exec_read    = 3'b011,
-             _exec_write   = 3'b100,
-             _exec_jmp     = 3'b101,
-             _exec         = 3'b110;
+   parameter _reset   = 3'b000,
+             _fetch0  = 3'b001,
+             _fetch1  = 3'b010,
+             _decode  = 3'b011,
+             _exec    = 3'b100;
+   parameter _read    = 2'b00,
+             _write   = 2'b01,
+             _jmp     = 2'b10,
+             _alu     = 2'b11;
    
    initial begin
-      state = _reset;
+      state <= _reset;
    end
    
    always @(clk or reset) begin
-      if (reset)
-         state = _reset;
+      if (reset) state <= _reset;
       else if (clk)
          case(state)
             _reset: begin
-               pc = 23'b0;
-               state = _fetch;
+               pc <= 23'b0;
+               state <= _fetch0;
             end
-            _fetch: begin
-               instruct = mem_din;
-               state = _decode;
-               pc = pc + 1;
+            _fetch0: begin // fetch
+               mem_addr <= pc;
+               state <= _fetch1;
             end
-            _decode:
-               case(instruct[31:28])
-                  4'b0000: state = _exec_read;
-                  4'b0001: state = _exec_write;
-                  4'b0010: state = _exec_jmp;
-                  4'b0011: state = _exec_jmp;
-                  4'b0100: state = _exec_jmp;
-                  4'b0101: state = _exec_jmp;
-                  4'b0110: state = _exec_jmp;
-                  4'b0111: state = _exec_jmp;
-                  default: state = _exec;
-               endcase
-            _exec_read: begin
-               case(instruct[27:26])
-                  2'b00: r0 = mem_din;
-                  2'b01: r1 = mem_din;
-                  2'b10: r2 = mem_din;
-                  2'b11: r3 = mem_din;
-               endcase
-               state = _fetch;
+            _fetch1: begin // 
+               instruct <= mem_din;
+               pc <= pc + 1;
+               state <= _decode;               
             end
-            _exec_write: begin
-               case(instruct[27:26])
-                  2'b00: mem_dout = r0;
-                  2'b01: mem_dout = r1;
-                  2'b10: mem_dout = r2;
-                  2'b11: mem_dout = r3;
-               endcase
-               state = _fetch;
-            end
-            _exec_jmp: begin
-               pc[23:0] = instruct[23:0];
-               state = _fetch;
-            end
-            _exec: begin
-               alu_op = instruct[30:28];
-               alu_inp2 = mem_din;
-               case(instruct[27:26])
+            _decode: begin // decode
+               state <= _exec;
+               case(instruct[31:30])
                   2'b00: begin
-                     alu_inp1 = r0;                     
-                     r0 = alu_outp;
+                     mem_addr <= instruct[23:0];
+                     exec_state <= _read;
                   end
                   2'b01: begin
-                     alu_inp1 = r1;
-                     r0 = alu_outp;
+                     mem_addr <= instruct[23:0];
+                     exec_state <= _write;
                   end
-                  2'b10: begin
-                     alu_inp1 = r2;
-                     r0 = alu_outp;
+                  2'b10: exec_state <= _jmp;
+                  2'b11: exec_state <= _alu;
+               endcase
+            end
+            _exec: begin
+               case(exec_state)
+                  _read: begin // read from memory
+                     case(instruct[29:28])
+                        2'b00: r0 <= mem_din;
+                        2'b01: r1 <= mem_din;
+                        2'b10: r2 <= mem_din;
+                        2'b11: r3 <= mem_din;
+                     endcase
                   end
-                  2'b11: begin
-                     alu_inp1 = r3;
-                     r0 = alu_outp;
+                  _write: begin // write to memory
+                     case(instruct[29:28])
+                        2'b00: mem_dout <= r0;
+                        2'b01: mem_dout <= r1;
+                        2'b10: mem_dout <= r2;
+                        2'b11: mem_dout <= r3;
+                     endcase
+                  end
+                  _jmp: begin // jump to memory
+                     pc <= instruct[23:0];
+                  end
+                  _alu: begin // arithmetic-logic unit
+                     alu_op <= instruct[29:27];
+                     case(instruct[26:25])
+                        2'b00: alu_inp1 <= r0;
+                        2'b01: alu_inp1 <= r1;
+                        2'b10: alu_inp1 <= r2;
+                        2'b11: alu_inp1 <= r3;
+                     endcase
+                     case(instruct[24:23])
+                        2'b00: alu_inp2 <= r0;
+                        2'b01: alu_inp2 <= r1;
+                        2'b10: alu_inp2 <= r2;
+                        2'b11: alu_inp2 <= r3;
+                     endcase
+                     case(instruct[22:21])
+                        2'b00: r0 <= alu_outp;
+                        2'b01: r1 <= alu_outp;
+                        2'b10: r2 <= alu_outp;
+                        2'b11: r3 <= alu_outp;
+                     endcase
                   end
                endcase
-               state = _fetch;
+               state <= _fetch0;
             end
-            default:
-               state = _fetch;
+            default: state <= _fetch0;
          endcase
-         if (state == _exec_write)
-            mem_write = 1'b1;
-         else
-            mem_write = 1'b0;         
-         mem_addr = pc;
+         if (state == _fetch0 || exec_state == _read || exec_state == _write)
+            mem_enable <= 1'b1;
+         else mem_enable <= 1'b0;
+         if (exec_state == _write) mem_write <= 1'b1;
+         else mem_write <= 1'b0;
    end
 
 endmodule
